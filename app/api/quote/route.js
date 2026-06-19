@@ -5,9 +5,9 @@
 // Prices are typically delayed ~15-20 minutes (or the latest close outside
 // market hours). It is an UNOFFICIAL endpoint and can change without notice.
 // See README for how to swap in Stooq (EOD) or J-Quants (official, free key).
-
+ 
 export const dynamic = "force-dynamic";
-
+ 
 async function fetchOne(symbol) {
   const hosts = [
     "https://query1.finance.yahoo.com",
@@ -34,7 +34,7 @@ async function fetchOne(symbol) {
         lastErr = "価格が見つかりません";
         continue;
       }
-
+ 
       // Sum the dividends actually paid in the trailing 12 months
       // = an estimate of the annual dividend per share (実績ベース).
       let annualDividend = null;
@@ -52,7 +52,7 @@ async function fetchOne(symbol) {
         }
         if (count > 0) annualDividend = Math.round(sum * 100) / 100;
       }
-
+ 
       return {
         symbol,
         ok: true,
@@ -67,21 +67,31 @@ async function fetchOne(symbol) {
   }
   return { symbol, ok: false, error: lastErr };
 }
-
+ 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const raw = (searchParams.get("symbols") || "").trim();
-  if (!raw) return Response.json({ quotes: [], fetchedAt: Date.now() });
-
-  const symbols = [
-    ...new Set(
-      raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    ),
-  ].slice(0, 50);
-
-  const quotes = await Promise.all(symbols.map(fetchOne));
-  return Response.json({ quotes, fetchedAt: Date.now() });
+ 
+  const symbols = raw
+    ? [
+        ...new Set(
+          raw
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        ),
+      ].slice(0, 50)
+    : [];
+ 
+  // Fetch the requested quotes and the USD/JPY rate in parallel.
+  // Yahoo's "JPY=X" = how many yen per 1 USD (e.g. ~150), used to convert
+  // US-stock values into yen for the combined portfolio totals.
+  const [quotes, rateQuote] = await Promise.all([
+    Promise.all(symbols.map(fetchOne)),
+    fetchOne("JPY=X"),
+  ]);
+  const usdJpy = rateQuote.ok ? rateQuote.price : null;
+ 
+  return Response.json({ quotes, usdJpy, fetchedAt: Date.now() });
 }
+ 
