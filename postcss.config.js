@@ -1,7 +1,6 @@
-node_modules
-.next
-out
-.DS_Store
-*.log
-.env*.local
-.vercel
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
